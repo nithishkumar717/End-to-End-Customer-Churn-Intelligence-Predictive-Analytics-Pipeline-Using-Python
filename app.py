@@ -10,8 +10,12 @@ import joblib
 import pandas as pd
 import numpy as np
 import streamlit as st
-import plotly.graph_objects as go
-import plotly.express as px
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    HAS_PLOTLY = True
+except ImportError:
+    HAS_PLOTLY = False
 import time
 
 # Set Streamlit Page Configuration
@@ -314,27 +318,31 @@ elif page == "🎯 Customer Risk Profiler & XAI":
         res1, res2 = st.columns([1.1, 1.9])
 
         with res1:
-            # Interactive Plotly Gauge Meter
-            fig_gauge = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=round(prob * 100, 1),
-                domain={'x': [0, 1], 'y': [0, 1]},
-                title={'text': "Churn Probability (%)", 'font': {'size': 18, 'color': '#1E3A8A'}},
-                gauge={
-                    'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                    'bar': {'color': "#DC2626" if prob >= 0.65 else ("#D97706" if prob >= 0.35 else "#059669")},
-                    'bgcolor': "white",
-                    'borderwidth': 2,
-                    'bordercolor': "#CBD5E1",
-                    'steps': [
-                        {'range': [0, 35], 'color': '#DCFCE7'},
-                        {'range': [35, 65], 'color': '#FEF3C7'},
-                        {'range': [65, 100], 'color': '#FEE2E2'}
-                    ]
-                }
-            ))
-            fig_gauge.update_layout(height=260, margin=dict(l=20, r=20, t=40, b=20))
-            st.plotly_chart(fig_gauge, use_container_width=True)
+            if HAS_PLOTLY:
+                # Interactive Plotly Gauge Meter
+                fig_gauge = go.Figure(go.Indicator(
+                    mode="gauge+number",
+                    value=round(prob * 100, 1),
+                    domain={'x': [0, 1], 'y': [0, 1]},
+                    title={'text': "Churn Probability (%)", 'font': {'size': 18, 'color': '#1E3A8A'}},
+                    gauge={
+                        'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                        'bar': {'color': "#DC2626" if prob >= 0.65 else ("#D97706" if prob >= 0.35 else "#059669")},
+                        'bgcolor': "white",
+                        'borderwidth': 2,
+                        'bordercolor': "#CBD5E1",
+                        'steps': [
+                            {'range': [0, 35], 'color': '#DCFCE7'},
+                            {'range': [35, 65], 'color': '#FEF3C7'},
+                            {'range': [65, 100], 'color': '#FEE2E2'}
+                        ]
+                    }
+                ))
+                fig_gauge.update_layout(height=260, margin=dict(l=20, r=20, t=40, b=20))
+                st.plotly_chart(fig_gauge, use_container_width=True)
+            else:
+                st.metric("Predicted Churn Probability", f"{prob * 100:.1f}%")
+                st.progress(float(prob))
 
             if prob >= 0.65:
                 st.markdown('<div class="badge-critical">🚨 CRITICAL ATTRITION RISK</div>', unsafe_allow_html=True)
@@ -360,7 +368,7 @@ elif page == "🎯 Customer Risk Profiler & XAI":
             for a in anchors[:4]:
                 plot_items.append({"Feature": a['feature'], "Impact": -a['impact'], "Type": "Loyalty Anchor (-)"})
 
-            if plot_items:
+            if plot_items and HAS_PLOTLY:
                 plot_df = pd.DataFrame(plot_items)
                 fig_xai = px.bar(
                     plot_df, x="Impact", y="Feature", color="Type", orientation="h",
@@ -369,6 +377,10 @@ elif page == "🎯 Customer Risk Profiler & XAI":
                 )
                 fig_xai.update_layout(height=280, margin=dict(l=10, r=10, t=35, b=10))
                 st.plotly_chart(fig_xai, use_container_width=True)
+            elif plot_items:
+                for item in plot_items:
+                    icon = "🔴" if "Amplifier" in item["Type"] else "🟢"
+                    st.write(f"{icon} **{item['Feature']}**: `{item['Impact']:+.3f}`")
 
         st.markdown("---")
         st.markdown("### 💡 Prescriptive Retention Recommendations")
@@ -466,13 +478,16 @@ elif page == "🔄 'What-If' Policy Simulator":
         with kpi_s4:
             st.metric("Est. Annual Revenue Preserved", f"${sim_result['annual_revenue_preserved']:,.2f}")
 
-        # Plotly comparison bar chart
-        fig_sim = go.Figure(data=[
-            go.Bar(name='Baseline Risk', x=['Attrition Probability'], y=[sim_result['base_churn_prob']*100], marker_color='#DC2626'),
-            go.Bar(name='After Strategic Intervention', x=['Attrition Probability'], y=[sim_result['simulated_churn_prob']*100], marker_color='#059669')
-        ])
-        fig_sim.update_layout(barmode='group', height=260, yaxis=dict(title='Churn Risk (%)', range=[0, 100]))
-        st.plotly_chart(fig_sim, use_container_width=True)
+        # Comparison chart
+        if HAS_PLOTLY:
+            fig_sim = go.Figure(data=[
+                go.Bar(name='Baseline Risk', x=['Attrition Probability'], y=[sim_result['base_churn_prob']*100], marker_color='#DC2626'),
+                go.Bar(name='After Strategic Intervention', x=['Attrition Probability'], y=[sim_result['simulated_churn_prob']*100], marker_color='#059669')
+            ])
+            fig_sim.update_layout(barmode='group', height=260, yaxis=dict(title='Churn Risk (%)', range=[0, 100]))
+            st.plotly_chart(fig_sim, use_container_width=True)
+        else:
+            st.write(f"**Baseline Risk:** {sim_result['base_churn_prob']*100:.1f}% -> **Simulated Risk:** {sim_result['simulated_churn_prob']*100:.1f}%")
 
         st.success(f"""
         **Executive Conclusion:** Implementing these retention interventions successfully lowers customer churn probability 
